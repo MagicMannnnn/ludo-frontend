@@ -7,6 +7,7 @@ type Props = {
   mySeat: number | null;
   legalTokenIds: number[];
   onTokenClick: (tokenId: number) => void;
+  activeSeat?: number; // B) highlight whose turn it is
 };
 
 type TokenDraw = {
@@ -25,20 +26,23 @@ function useSize<T extends HTMLElement>() {
   useEffect(() => {
     if (!ref.current) return;
     const el = ref.current;
+
     const ro = new ResizeObserver(() => {
       const r = el.getBoundingClientRect();
       setSize({ w: r.width, h: r.height });
     });
+
     ro.observe(el);
     const r = el.getBoundingClientRect();
     setSize({ w: r.width, h: r.height });
+
     return () => ro.disconnect();
   }, []);
 
   return { ref, size };
 }
 
-export function Board({ state, mySeat, legalTokenIds, onTokenClick }: Props) {
+export function Board({ state, mySeat, legalTokenIds, onTokenClick, activeSeat }: Props) {
   const layout = useMemo(() => computeLayout(state.board), [state.board]);
 
   // Design size (scaled to fit container)
@@ -85,11 +89,7 @@ export function Board({ state, mySeat, legalTokenIds, onTokenClick }: Props) {
 
       for (const t of p.tokens) {
         const isMine = mySeat === seat;
-        const clickable =
-          isMine &&
-          state.turnSeat === seat &&
-          p.waitingForTurn &&
-          legalTokenIds.includes(t.id);
+        const clickable = isMine && state.turnSeat === seat && p.waitingForTurn && legalTokenIds.includes(t.id);
 
         let pt: { x: number; y: number } | null = null;
 
@@ -111,11 +111,31 @@ export function Board({ state, mySeat, legalTokenIds, onTokenClick }: Props) {
     return out;
   }, [state, mySeat, legalTokenIds, layout]);
 
+  // C) Group tokens by cell so we can offset them
+  const grouped = useMemo(() => {
+    const map = new Map<string, TokenDraw[]>();
+    for (const t of tokens) {
+      const k = `${t.x},${t.y}`;
+      const arr = map.get(k) ?? [];
+      arr.push(t);
+      map.set(k, arr);
+    }
+    for (const arr of map.values()) {
+      arr.sort((a, b) => (a.seat - b.seat) || (a.tokenId - b.tokenId));
+    }
+    return map;
+  }, [tokens]);
+
   const cellLeftTop = (x: number, y: number) => {
     const left = padPx + x * (cellPx + gap);
     const top = padPx + y * (cellPx + gap);
     return { left, top };
   };
+
+  // B) Active seat highlight
+  const active = activeSeat ?? state.turnSeat;
+  const activeColor = layout.seatColors[active] ?? "rgba(255,255,255,0.22)";
+  const activeTint = layout.seatTints[active] ?? "rgba(255,255,255,0.06)";
 
   return (
     <div
@@ -125,9 +145,12 @@ export function Board({ state, mySeat, legalTokenIds, onTokenClick }: Props) {
         height: "100%",
         minHeight: 300,
         borderRadius: 22,
-        border: "1px solid var(--border)",
-        background: "rgba(255,255,255,0.04)",
-        boxShadow: "var(--shadow)",
+        border: "1px solid rgba(255,255,255,0.14)",
+        background: `linear-gradient(180deg, ${activeTint}, rgba(255,255,255,0.04))`,
+        boxShadow:
+          active === mySeat
+            ? `0 0 0 2px rgba(255,255,255,0.10), 0 0 0 6px rgba(124,58,237,0.18), 0 0 28px ${activeColor}`
+            : `0 0 0 2px rgba(255,255,255,0.08), 0 0 20px rgba(0,0,0,0.35)`,
         position: "relative",
         overflow: "hidden",
       }}
@@ -210,40 +233,63 @@ export function Board({ state, mySeat, legalTokenIds, onTokenClick }: Props) {
             pointerEvents: "none",
           }}
         >
-          {tokens.map((t) => {
-            const color = layout.seatColors[t.seat];
-            const { left, top } = cellLeftTop(t.x, t.y);
+          {Array.from(grouped.entries()).flatMap(([key, arr]) => {
+            const [xStr, yStr] = key.split(",");
+            const x = Number(xStr);
+            const y = Number(yStr);
+
+            const { left, top } = cellLeftTop(x, y);
 
             const size = 14;
-            const cx = left + (cellPx - size) / 2;
-            const cy = top + (cellPx - size) / 2;
+            const centerX = left + (cellPx - size) / 2;
+            const centerY = top + (cellPx - size) / 2;
 
-            return (
-              <button
-                key={`${t.seat}-${t.tokenId}`}
-                onClick={() => t.clickable && onTokenClick(t.tokenId)}
-                disabled={!t.clickable}
-                title={`Seat ${t.seat} token ${t.tokenId}`}
-                style={{
-                  position: "absolute",
-                  left: 0,
-                  top: 0,
-                  width: size,
-                  height: size,
-                  borderRadius: 999,
-                  background: color,
-                  border: t.isMine ? "2px solid rgba(255,255,255,0.92)" : "1px solid rgba(255,255,255,0.55)",
-                  boxShadow: t.clickable
-                    ? "0 0 0 3px rgba(124,58,237,0.55), 0 10px 20px rgba(0,0,0,0.35)"
-                    : "0 8px 18px rgba(0,0,0,0.35)",
-                  transform: `translate(${cx}px, ${cy}px)`,
-                  transition: "transform 220ms ease",
-                  cursor: t.clickable ? "pointer" : "default",
-                  pointerEvents: t.clickable ? "auto" : "none",
-                  padding: 0,
-                }}
-              />
-            );
+            // C) Offsets for up to ~8 tokens on one cell
+            const offsets: Array<{ dx: number; dy: number }> = [
+              { dx: -8, dy: -8 },
+              { dx: 8, dy: -8 },
+              { dx: -8, dy: 8 },
+              { dx: 8, dy: 8 },
+              { dx: 0, dy: -11 },
+              { dx: 11, dy: 0 },
+              { dx: 0, dy: 11 },
+              { dx: -11, dy: 0 },
+            ];
+
+            return arr.map((t, idx) => {
+              const off = offsets[idx] ?? { dx: 0, dy: 0 };
+              const cx = centerX + off.dx * 0.6;
+              const cy = centerY + off.dy * 0.6;
+
+              const color = layout.seatColors[t.seat];
+
+              return (
+                <button
+                  key={`${t.seat}-${t.tokenId}`}
+                  onClick={() => t.clickable && onTokenClick(t.tokenId)}
+                  disabled={!t.clickable}
+                  title={`Seat ${t.seat} token ${t.tokenId}`}
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 0,
+                    width: size,
+                    height: size,
+                    borderRadius: 999,
+                    background: color,
+                    border: t.isMine ? "2px solid rgba(255,255,255,0.92)" : "1px solid rgba(255,255,255,0.55)",
+                    boxShadow: t.clickable
+                      ? "0 0 0 3px rgba(124,58,237,0.55), 0 10px 20px rgba(0,0,0,0.35)"
+                      : "0 8px 18px rgba(0,0,0,0.35)",
+                    transform: `translate(${cx}px, ${cy}px)`,
+                    transition: "transform 220ms ease",
+                    cursor: t.clickable ? "pointer" : "default",
+                    pointerEvents: t.clickable ? "auto" : "none",
+                    padding: 0,
+                  }}
+                />
+              );
+            });
           })}
         </div>
       </div>

@@ -43,6 +43,23 @@ export function GameScreen({
   const turn = snap.state.turnSeat;
   const isMobile = useIsMobile();
 
+  // Auto-roll toggle (never disables itself)
+  const [autoRoll, setAutoRoll] = useState(false);
+
+  // Auto-roll behaviour: if Roll is clickable, "click it for the user"
+  useEffect(() => {
+    if (!autoRoll) return;
+    if (!canRoll) return;
+    if (isBusy) return;
+
+    // Small delay so UI updates feel natural and prevents tight loops
+    const t = window.setTimeout(() => {
+      onRoll();
+    }, 650);
+
+    return () => window.clearTimeout(t);
+  }, [autoRoll, canRoll, isBusy, onRoll]);
+
   const statusPill = !snap.state.started ? (
     <Pill tone="warn">Lobby</Pill>
   ) : turn === session.seat ? (
@@ -51,7 +68,6 @@ export function GameScreen({
     <Pill tone="neutral">Waiting</Pill>
   );
 
-  // Desktop: no page scroll; Mobile: page can scroll
   return (
     <div
       style={{
@@ -61,6 +77,7 @@ export function GameScreen({
       }}
     >
       <div style={{ maxWidth: 1200, margin: "0 auto", height: isMobile ? "auto" : "100%" }}>
+        {/* Header */}
         <div
           style={{
             display: "flex",
@@ -86,6 +103,7 @@ export function GameScreen({
           </Button>
         </div>
 
+        {/* Main */}
         <div
           style={{
             display: "grid",
@@ -94,18 +112,25 @@ export function GameScreen({
             height: isMobile ? "auto" : "calc(100% - 64px)",
           }}
         >
-          {/* Board area (square fit) */}
+          {/* Board */}
           <div
             style={{
               minHeight: isMobile ? 340 : 520,
               height: isMobile ? "min(72vh, 620px)" : "100%",
             }}
           >
-            <Board state={snap.state} mySeat={session.seat} legalTokenIds={legalTokenIds} onTokenClick={onMove} />
+            <Board
+              state={snap.state}
+              mySeat={session.seat}
+              legalTokenIds={legalTokenIds}
+              onTokenClick={onMove}
+              activeSeat={snap.state.turnSeat}
+            />
           </div>
 
-          {/* Right side: on desktop, stack controls + players. On mobile it'll be below. */}
+          {/* Side panels */}
           <div style={{ display: "flex", flexDirection: "column", gap: 12, height: isMobile ? "auto" : "100%" }}>
+            {/* Controls */}
             <Card style={{ padding: 14 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -127,6 +152,11 @@ export function GameScreen({
                 <Button disabled={!canRoll || isBusy} onClick={onRoll}>
                   Roll
                 </Button>
+
+                <Button variant="ghost" disabled={isBusy} onClick={() => setAutoRoll((v) => !v)}>
+                  {autoRoll ? "Auto-roll: ON" : "Auto-roll: OFF"}
+                </Button>
+
                 <Pill tone={canChooseMove ? "good" : "neutral"}>{canChooseMove ? "Select token" : "Idle"}</Pill>
               </div>
 
@@ -137,6 +167,7 @@ export function GameScreen({
               ) : null}
             </Card>
 
+            {/* Players */}
             <Card style={{ padding: 14 }}>
               <div style={{ fontSize: 14, fontWeight: 950, marginBottom: 10 }}>Players</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -150,7 +181,7 @@ export function GameScreen({
                       padding: "10px 10px",
                       borderRadius: 14,
                       border: "1px solid var(--border)",
-                      background: idx === turn ? "rgba(124,58,237,0.12)" : "rgba(255,255,255,0.04)",
+                      background: idx === turn ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.04)",
                     }}
                   >
                     <div style={{ display: "flex", flexDirection: "column" }}>
