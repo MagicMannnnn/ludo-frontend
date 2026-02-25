@@ -31,7 +31,9 @@ export function useGameController() {
 
   useEffect(() => {
     if (code) connect(code);
-    return () => socketRef.current?.disconnect();
+    return () => {
+      socketRef.current?.disconnect();
+    };
   }, [code, connect]);
 
   const host = useCallback(async (name: string) => {
