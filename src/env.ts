@@ -13,5 +13,5 @@ export function getApiBaseUrl(): string {
   const c = (globalThis as any)?.process?.env?.REACT_APP_API_URL as string | undefined;
   if (c) return c.replace(/\/$/, "");
 
-  return "http://localhost:3000";
+  return "https://api.george.richmond.gg";
 }
