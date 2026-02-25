@@ -184,7 +184,7 @@ export function GameScreen({
 
                 <Button
                   variant="ghost"
-                  disabled={isBusy || iAmFinished || !!snap.state.finished}
+                  disabled={iAmFinished || !!snap.state.finished}
                   onClick={() => setAutoRoll((v) => !v)}
                 >
                   {autoRoll ? "Auto-roll: ON" : "Auto-roll: OFF"}

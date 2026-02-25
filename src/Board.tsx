@@ -150,9 +150,10 @@ export function Board({ state, mySeat, legalTokenIds, onTokenClick, activeSeat }
   const emptyBg = "rgba(255,255,255,0.0)";          // empty grid area
   const outerShadow = "0 18px 50px rgba(0,0,0,0.45)";
 
-  // Safe zone styling: brighter accent
-  const safeBg = "rgba(167,139,250,0.28)";
-  const safeRing = "inset 0 0 0 2px rgba(167,139,250,0.55)";
+  // Safe zone styling: faint light ring, no fill
+const safeBg = "rgba(0,0,0,0)"; // fully transparent
+const safeRing =
+  "inset 0 0 0 2px rgba(163,157,182,0.55), 0 0 6px rgba(163,157,182,0.35)";
 
   return (
     <div
@@ -239,9 +240,7 @@ export function Board({ state, mySeat, legalTokenIds, onTokenClick, activeSeat }
 
                   // Safe zones override
                   if (safeIndexSet.has(idx)) {
-                    bg = safeBg;
-                    extraShadow = safeRing;
-                    border = `1px solid rgba(167,139,250,0.55)`;
+                    border = `1px solid rgba(244, 244, 244, 0.79)`;
                   }
                 }
               }
