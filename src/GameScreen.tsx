@@ -43,25 +43,27 @@ export function GameScreen({
   const turn = snap.state.turnSeat;
   const isMobile = useIsMobile();
 
+  const iAmFinished = typeof me.finishingPosition === "number";
+
   // Auto-roll toggle (never disables itself)
   const [autoRoll, setAutoRoll] = useState(false);
 
-  // Auto-roll behaviour: if Roll is clickable, "click it for the user"
   useEffect(() => {
     if (!autoRoll) return;
     if (!canRoll) return;
     if (isBusy) return;
 
-    // Small delay so UI updates feel natural and prevents tight loops
     const t = window.setTimeout(() => {
       onRoll();
-    }, 650);
+    }, 800);
 
     return () => window.clearTimeout(t);
   }, [autoRoll, canRoll, isBusy, onRoll]);
 
   const statusPill = !snap.state.started ? (
     <Pill tone="warn">Lobby</Pill>
+  ) : iAmFinished ? (
+    <Pill tone="good">Finished</Pill>
   ) : turn === session.seat ? (
     <Pill tone="good">Your turn</Pill>
   ) : (
@@ -90,11 +92,23 @@ export function GameScreen({
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: -0.3 }}>Game {session.code}</div>
+              <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: -0.3 }}>
+                Game {session.code}
+              </div>
               {statusPill}
+              {snap.state.finished ? <Pill tone="good">Game Over</Pill> : null}
             </div>
             <div style={{ fontSize: 13, color: "var(--muted)" }}>
-              You are <b>{me.name}</b> (seat {session.seat}). Turn: seat <b>{turn}</b>.
+              You are <b>{me.name}</b> (seat {session.seat}).{" "}
+              {iAmFinished ? (
+                <>
+                  Final: <b>#{me.finishingPosition}</b>
+                </>
+              ) : (
+                <>
+                  Turn: seat <b>{turn}</b>.
+                </>
+              )}
             </div>
           </div>
 
@@ -102,6 +116,17 @@ export function GameScreen({
             Leave
           </Button>
         </div>
+
+        {snap.state.finished ? (
+          <div style={{ marginBottom: 12 }}>
+            <Card style={{ padding: 12 }}>
+              <div style={{ fontWeight: 950, fontSize: 14 }}>Game finished</div>
+              <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 6 }}>
+                Players are locked. Start a new game to play again.
+              </div>
+            </Card>
+          </div>
+        ) : null}
 
         {/* Main */}
         <div
@@ -136,7 +161,11 @@ export function GameScreen({
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   <div style={{ fontSize: 14, fontWeight: 950 }}>Controls</div>
                   <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.45 }}>
-                    {canChooseMove ? (
+                    {snap.state.finished ? (
+                      <>Game over.</>
+                    ) : iAmFinished ? (
+                      <>You’ve finished — waiting for others.</>
+                    ) : canChooseMove ? (
                       <>Choose a highlighted token to move.</>
                     ) : canRoll ? (
                       <>Roll to take your turn.</>
@@ -149,15 +178,21 @@ export function GameScreen({
               </div>
 
               <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
-                <Button disabled={!canRoll || isBusy} onClick={onRoll}>
+                <Button disabled={!canRoll || isBusy || iAmFinished || !!snap.state.finished} onClick={onRoll}>
                   Roll
                 </Button>
 
-                <Button variant="ghost" disabled={isBusy} onClick={() => setAutoRoll((v) => !v)}>
+                <Button
+                  variant="ghost"
+                  disabled={isBusy || iAmFinished || !!snap.state.finished}
+                  onClick={() => setAutoRoll((v) => !v)}
+                >
                   {autoRoll ? "Auto-roll: ON" : "Auto-roll: OFF"}
                 </Button>
 
-                <Pill tone={canChooseMove ? "good" : "neutral"}>{canChooseMove ? "Select token" : "Idle"}</Pill>
+                <Pill tone={canChooseMove ? "good" : "neutral"}>
+                  {snap.state.finished ? "Over" : iAmFinished ? "Finished" : canChooseMove ? "Select token" : "Idle"}
+                </Pill>
               </div>
 
               {canChooseMove ? (
@@ -171,31 +206,48 @@ export function GameScreen({
             <Card style={{ padding: 14 }}>
               <div style={{ fontSize: 14, fontWeight: 950, marginBottom: 10 }}>Players</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {snap.state.players.map((p, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "10px 10px",
-                      borderRadius: 14,
-                      border: "1px solid var(--border)",
-                      background: idx === turn ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.04)",
-                    }}
-                  >
-                    <div style={{ display: "flex", flexDirection: "column" }}>
-                      <div style={{ fontWeight: 900, fontSize: 13 }}>
-                        {p.name} {p.is_ai ? "(AI)" : ""}
-                        {idx === session.seat ? " • You" : ""}
+                {snap.state.players.map((p, idx) => {
+                  const finished = typeof p.finishingPosition === "number";
+                  const isTurn = idx === turn;
+
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "10px 10px",
+                        borderRadius: 14,
+                        border: "1px solid var(--border)",
+                        background: finished
+                          ? "rgba(34,197,94,0.10)"
+                          : isTurn
+                          ? "rgba(255,255,255,0.06)"
+                          : "rgba(255,255,255,0.04)",
+                        opacity: finished ? 0.95 : 1,
+                      }}
+                    >
+                      <div style={{ display: "flex", flexDirection: "column" }}>
+                        <div style={{ fontWeight: 900, fontSize: 13 }}>
+                          {p.name} {p.is_ai ? "(AI)" : ""}
+                          {idx === session.seat ? " • You" : ""}
+                        </div>
+                        <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                          Seat {p.seat} • Waiting: {String(p.waitingForTurn)}
+                        </div>
                       </div>
-                      <div style={{ fontSize: 12, color: "var(--muted)" }}>
-                        Seat {p.seat} • Waiting: {String(p.waitingForTurn)}
+
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {finished ? (
+                          <Pill tone="good">FINISHED #{p.finishingPosition}</Pill>
+                        ) : (
+                          <Pill tone={isTurn ? "good" : "neutral"}>{isTurn ? "Turn" : "Idle"}</Pill>
+                        )}
                       </div>
                     </div>
-                    <Pill tone={idx === turn ? "good" : "neutral"}>{idx === turn ? "Turn" : "Idle"}</Pill>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </Card>
           </div>

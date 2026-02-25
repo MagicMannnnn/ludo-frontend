@@ -14,10 +14,10 @@
   --seat2:#3B82F6;
   --seat3:#F59E0B;
 
-  --seat0Tint:rgba(239,68,68,0.18);
-  --seat1Tint:rgba(34,197,94,0.18);
-  --seat2Tint:rgba(59,130,246,0.18);
-  --seat3Tint:rgba(245,158,11,0.18);
+  --seat0Tint:rgba(239,68,68,0.08);
+  --seat1Tint:rgba(34,197,94,0.08);
+  --seat2Tint:rgba(59,130,246,0.08);
+  --seat3Tint:rgba(245,158,11,0.08);
 }
 
 *{ box-sizing:border-box; }

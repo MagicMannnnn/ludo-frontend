@@ -7,7 +7,7 @@ type Props = {
   mySeat: number | null;
   legalTokenIds: number[];
   onTokenClick: (tokenId: number) => void;
-  activeSeat?: number; // B) highlight whose turn it is
+  activeSeat?: number;
 };
 
 type TokenDraw = {
@@ -45,7 +45,6 @@ function useSize<T extends HTMLElement>() {
 export function Board({ state, mySeat, legalTokenIds, onTokenClick, activeSeat }: Props) {
   const layout = useMemo(() => computeLayout(state.board), [state.board]);
 
-  // Design size (scaled to fit container)
   const cellPx = 34;
   const gap = 4;
   const padPx = 14;
@@ -56,11 +55,16 @@ export function Board({ state, mySeat, legalTokenIds, onTokenClick, activeSeat }
   const containerSize = Math.min(size.w || 0, size.h || 0);
   const scale = containerSize > 0 ? Math.min(1, containerSize / designSize) : 1;
 
+  const seatStarts = state.board.seatsStartingIndex ?? [];
+  const safeZones = state.board.safeZoneIndex ?? [];
+
   const spawnIndexToSeat = useMemo(() => {
     const m = new Map<number, number>();
-    state.board.seatsStartingIndex.forEach((idx, seat) => m.set(idx, seat));
+    seatStarts.forEach((idx, seat) => m.set(idx, seat));
     return m;
-  }, [state.board.seatsStartingIndex]);
+  }, [seatStarts]);
+
+  const safeIndexSet = useMemo(() => new Set<number>(safeZones), [safeZones]);
 
   const loopCoordToIndex = useMemo(() => {
     const m = new Map<string, number>();
@@ -86,10 +90,15 @@ export function Board({ state, mySeat, legalTokenIds, onTokenClick, activeSeat }
 
     for (let seat = 0; seat < 4; seat++) {
       const p = state.players[seat];
+      const isFinished = typeof p.finishingPosition === "number";
 
       for (const t of p.tokens) {
-        const isMine = mySeat === seat;
-        const clickable = isMine && state.turnSeat === seat && p.waitingForTurn && legalTokenIds.includes(t.id);
+        const clickable =
+          !isFinished &&
+          mySeat === seat &&
+          state.turnSeat === seat &&
+          p.waitingForTurn &&
+          legalTokenIds.includes(t.id);
 
         let pt: { x: number; y: number } | null = null;
 
@@ -98,20 +107,19 @@ export function Board({ state, mySeat, legalTokenIds, onTokenClick, activeSeat }
         } else if (t.position >= 0 && t.position < state.board.mainLoopLength) {
           pt = layout.loop[t.position] ?? null;
         } else if (t.position >= state.board.mainLoopLength + 1) {
-          const step = t.position - state.board.mainLoopLength; // 1..homeColumnLength
+          const step = t.position - state.board.mainLoopLength;
           pt = layout.home[seat][step - 1] ?? null;
         }
 
         if (!pt) continue;
 
-        out.push({ seat, tokenId: t.id, isMine, clickable, x: pt.x, y: pt.y });
+        out.push({ seat, tokenId: t.id, isMine: mySeat === seat, clickable, x: pt.x, y: pt.y });
       }
     }
 
     return out;
   }, [state, mySeat, legalTokenIds, layout]);
 
-  // C) Group tokens by cell so we can offset them
   const grouped = useMemo(() => {
     const map = new Map<string, TokenDraw[]>();
     for (const t of tokens) {
@@ -132,10 +140,19 @@ export function Board({ state, mySeat, legalTokenIds, onTokenClick, activeSeat }
     return { left, top };
   };
 
-  // B) Active seat highlight
   const active = activeSeat ?? state.turnSeat;
-  const activeColor = layout.seatColors[active] ?? "rgba(255,255,255,0.22)";
-  const activeTint = layout.seatTints[active] ?? "rgba(255,255,255,0.06)";
+  const activeColor = layout.seatColors[active] ?? "#ffffff";
+
+  // Brighter dark theme palette
+  const surfaceBg = "rgba(30, 34, 44, 0.98)";        // main board surface (lighter than before)
+  const cellBorder = "rgba(255,255,255,0.14)";       // clearer cell edges
+  const loopCellBg = "rgba(255,255,255,0.075)";      // loop squares brighter
+  const emptyBg = "rgba(255,255,255,0.0)";          // empty grid area
+  const outerShadow = "0 18px 50px rgba(0,0,0,0.45)";
+
+  // Safe zone styling: brighter accent
+  const safeBg = "rgba(167,139,250,0.28)";
+  const safeRing = "inset 0 0 0 2px rgba(167,139,250,0.55)";
 
   return (
     <div
@@ -145,16 +162,25 @@ export function Board({ state, mySeat, legalTokenIds, onTokenClick, activeSeat }
         height: "100%",
         minHeight: 300,
         borderRadius: 22,
-        border: "1px solid rgba(255,255,255,0.14)",
-        background: `linear-gradient(180deg, ${activeTint}, rgba(255,255,255,0.04))`,
-        boxShadow:
-          active === mySeat
-            ? `0 0 0 2px rgba(255,255,255,0.10), 0 0 0 6px rgba(124,58,237,0.18), 0 0 28px ${activeColor}`
-            : `0 0 0 2px rgba(255,255,255,0.08), 0 0 20px rgba(0,0,0,0.35)`,
+        border: `3px solid ${activeColor}`, // border-only tint
+        boxShadow: `${outerShadow}, 0 0 16px ${activeColor}33`,
+        background: surfaceBg,
         position: "relative",
         overflow: "hidden",
       }}
     >
+      {/* subtle “happy” highlight gradient */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "radial-gradient(900px 500px at 20% 10%, rgba(255,255,255,0.10), rgba(255,255,255,0.00) 60%)," +
+            "radial-gradient(700px 500px at 90% 20%, rgba(167,139,250,0.09), rgba(255,255,255,0.00) 55%)",
+          pointerEvents: "none",
+        }}
+      />
+
       <div
         style={{
           width: designSize,
@@ -187,22 +213,36 @@ export function Board({ state, mySeat, legalTokenIds, onTokenClick, activeSeat }
               const homeSeat = homeSeatAt(x, y);
 
               let border = "1px solid transparent";
-              let bg = "transparent";
+              let bg = emptyBg;
+              let extraShadow: string | undefined;
 
               if (loop || homeSeat != null) {
-                border = "1px solid rgba(255,255,255,0.10)";
-                bg = "rgba(255,255,255,0.04)";
+                border = `1px solid ${cellBorder}`;
+                bg = loopCellBg;
               }
 
-              // Home tint
-              if (homeSeat != null) bg = layout.seatTints[homeSeat];
+              // Home tint (seat-specific, slightly stronger so it reads)
+              if (homeSeat != null) {
+                bg = layout.seatTints[homeSeat]; // your tints are already “soft”
+                border = `1px solid rgba(255,255,255,0.16)`;
+              }
 
-              // Spawn tint on loop squares
               if (loop) {
                 const idx = loopCoordToIndex(x, y);
                 if (idx != null) {
+                  // Spawn tint on loop squares (seat start)
                   const seat = spawnIndexToSeat.get(idx);
-                  if (seat != null) bg = layout.seatTints[seat];
+                  if (seat != null) {
+                    bg = layout.seatTints[seat];
+                    border = `1px solid rgba(255,255,255,0.18)`;
+                  }
+
+                  // Safe zones override
+                  if (safeIndexSet.has(idx)) {
+                    bg = safeBg;
+                    extraShadow = safeRing;
+                    border = `1px solid rgba(167,139,250,0.55)`;
+                  }
                 }
               }
 
@@ -215,6 +255,7 @@ export function Board({ state, mySeat, legalTokenIds, onTokenClick, activeSeat }
                     borderRadius: 10,
                     border,
                     background: bg,
+                    boxShadow: extraShadow,
                   }}
                 />
               );
@@ -222,7 +263,7 @@ export function Board({ state, mySeat, legalTokenIds, onTokenClick, activeSeat }
           )}
         </div>
 
-        {/* Token overlay with movement animation */}
+        {/* Tokens */}
         <div
           style={{
             position: "absolute",
@@ -240,11 +281,10 @@ export function Board({ state, mySeat, legalTokenIds, onTokenClick, activeSeat }
 
             const { left, top } = cellLeftTop(x, y);
 
-            const size = 14;
-            const centerX = left + (cellPx - size) / 2;
-            const centerY = top + (cellPx - size) / 2;
+            const sizeTok = 15; // slightly larger for better readability
+            const centerX = left + (cellPx - sizeTok) / 2;
+            const centerY = top + (cellPx - sizeTok) / 2;
 
-            // C) Offsets for up to ~8 tokens on one cell
             const offsets: Array<{ dx: number; dy: number }> = [
               { dx: -8, dy: -8 },
               { dx: 8, dy: -8 },
@@ -273,14 +313,16 @@ export function Board({ state, mySeat, legalTokenIds, onTokenClick, activeSeat }
                     position: "absolute",
                     left: 0,
                     top: 0,
-                    width: size,
-                    height: size,
+                    width: sizeTok,
+                    height: sizeTok,
                     borderRadius: 999,
                     background: color,
-                    border: t.isMine ? "2px solid rgba(255,255,255,0.92)" : "1px solid rgba(255,255,255,0.55)",
+                    border: t.isMine
+                      ? "2px solid rgba(255,255,255,0.95)"
+                      : "1px solid rgba(255,255,255,0.65)",
                     boxShadow: t.clickable
-                      ? "0 0 0 3px rgba(124,58,237,0.55), 0 10px 20px rgba(0,0,0,0.35)"
-                      : "0 8px 18px rgba(0,0,0,0.35)",
+                      ? "0 0 0 3px rgba(124,58,237,0.55), 0 10px 18px rgba(0,0,0,0.35)"
+                      : "0 8px 16px rgba(0,0,0,0.35)",
                     transform: `translate(${cx}px, ${cy}px)`,
                     transition: "transform 220ms ease",
                     cursor: t.clickable ? "pointer" : "default",
