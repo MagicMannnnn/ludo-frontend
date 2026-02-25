@@ -3,6 +3,7 @@ import { Landing } from "./Landing";
 import { GameScreen } from "./GameScreen";
 import { ToastProvider } from "./toast";
 import { useGameController } from "./useGame";
+import "./theme.css";
 
 export function LudoApp() {
   return (

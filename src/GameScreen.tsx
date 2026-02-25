@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import type { GameSnapshot, Session } from "./types";
 import { Board } from "./Board";
 import { Button, Card, Pill } from "./ui";
@@ -16,6 +16,18 @@ type Props = {
   onLeave: () => void;
 };
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 860px)");
+    const on = () => setIsMobile(mq.matches);
+    on();
+    mq.addEventListener?.("change", on);
+    return () => mq.removeEventListener?.("change", on);
+  }, []);
+  return isMobile;
+}
+
 export function GameScreen({
   session,
   snap,
@@ -29,45 +41,76 @@ export function GameScreen({
 }: Props) {
   const me = snap.state.players[session.seat];
   const turn = snap.state.turnSeat;
+  const isMobile = useIsMobile();
 
-  const statusPill = useMemo(() => {
-    if (!snap.state.started) return <Pill tone="warn">Lobby</Pill>;
-    if (turn === session.seat) return <Pill tone="good">Your turn</Pill>;
-    return <Pill tone="neutral">Waiting</Pill>;
-  }, [snap.state.started, turn, session.seat]);
+  const statusPill = !snap.state.started ? (
+    <Pill tone="warn">Lobby</Pill>
+  ) : turn === session.seat ? (
+    <Pill tone="good">Your turn</Pill>
+  ) : (
+    <Pill tone="neutral">Waiting</Pill>
+  );
 
+  // Desktop: no page scroll; Mobile: page can scroll
   return (
-    <div style={{ minHeight: "100vh", background: "#F6F7FB" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "26px 16px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ fontSize: 18, fontWeight: 900, letterSpacing: -0.3 }}>Game {session.code}</div>
+    <div
+      style={{
+        height: isMobile ? "auto" : "100vh",
+        overflowY: isMobile ? "auto" : "hidden",
+        padding: "16px 14px",
+      }}
+    >
+      <div style={{ maxWidth: 1200, margin: "0 auto", height: isMobile ? "auto" : "100%" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+            marginBottom: 12,
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: -0.3 }}>Game {session.code}</div>
               {statusPill}
             </div>
-            <div style={{ fontSize: 13, color: "rgba(0,0,0,0.65)" }}>
+            <div style={{ fontSize: 13, color: "var(--muted)" }}>
               You are <b>{me.name}</b> (seat {session.seat}). Turn: seat <b>{turn}</b>.
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Button variant="ghost" onClick={onLeave}>
-              Leave
-            </Button>
-          </div>
+          <Button variant="ghost" onClick={onLeave}>
+            Leave
+          </Button>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 360px", gap: 16, marginTop: 16 }}>
-          <div style={{ display: "flex", justifyContent: "center" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr" : "minmax(520px, 1fr) 360px",
+            gap: 12,
+            height: isMobile ? "auto" : "calc(100% - 64px)",
+          }}
+        >
+          {/* Board area (square fit) */}
+          <div
+            style={{
+              minHeight: isMobile ? 340 : 520,
+              height: isMobile ? "min(72vh, 620px)" : "100%",
+            }}
+          >
             <Board state={snap.state} mySeat={session.seat} legalTokenIds={legalTokenIds} onTokenClick={onMove} />
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <Card style={{ padding: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          {/* Right side: on desktop, stack controls + players. On mobile it'll be below. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, height: isMobile ? "auto" : "100%" }}>
+            <Card style={{ padding: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <div style={{ fontSize: 14, fontWeight: 900 }}>Controls</div>
-                  <div style={{ fontSize: 12, color: "rgba(0,0,0,0.65)", lineHeight: 1.4 }}>
+                  <div style={{ fontSize: 14, fontWeight: 950 }}>Controls</div>
+                  <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.45 }}>
                     {canChooseMove ? (
                       <>Choose a highlighted token to move.</>
                     ) : canRoll ? (
@@ -80,24 +123,22 @@ export function GameScreen({
                 <Dice value={snap.state.lastRoll} />
               </div>
 
-              <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
                 <Button disabled={!canRoll || isBusy} onClick={onRoll}>
                   Roll
                 </Button>
-                <Pill tone={canChooseMove ? "good" : "neutral"}>
-                  {canChooseMove ? "Select token" : "Not selecting"}
-                </Pill>
+                <Pill tone={canChooseMove ? "good" : "neutral"}>{canChooseMove ? "Select token" : "Idle"}</Pill>
               </div>
 
               {canChooseMove ? (
-                <div style={{ marginTop: 12, fontSize: 12, color: "rgba(0,0,0,0.65)" }}>
+                <div style={{ marginTop: 10, fontSize: 12, color: "var(--muted)" }}>
                   Legal tokens: <b>{legalTokenIds.join(", ") || "none"}</b>
                 </div>
               ) : null}
             </Card>
 
-            <Card style={{ padding: 16 }}>
-              <div style={{ fontSize: 14, fontWeight: 900, marginBottom: 8 }}>Players</div>
+            <Card style={{ padding: 14 }}>
+              <div style={{ fontSize: 14, fontWeight: 950, marginBottom: 10 }}>Players</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {snap.state.players.map((p, idx) => (
                   <div
@@ -108,17 +149,17 @@ export function GameScreen({
                       justifyContent: "space-between",
                       padding: "10px 10px",
                       borderRadius: 14,
-                      border: "1px solid rgba(0,0,0,0.10)",
-                      background: idx === turn ? "rgba(99,102,241,0.06)" : "#fff",
+                      border: "1px solid var(--border)",
+                      background: idx === turn ? "rgba(124,58,237,0.12)" : "rgba(255,255,255,0.04)",
                     }}
                   >
                     <div style={{ display: "flex", flexDirection: "column" }}>
-                      <div style={{ fontWeight: 800, fontSize: 13 }}>
+                      <div style={{ fontWeight: 900, fontSize: 13 }}>
                         {p.name} {p.is_ai ? "(AI)" : ""}
                         {idx === session.seat ? " • You" : ""}
                       </div>
-                      <div style={{ fontSize: 12, color: "rgba(0,0,0,0.65)" }}>
-                        Seat {p.seat} • WaitingForTurn: {String(p.waitingForTurn)}
+                      <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                        Seat {p.seat} • Waiting: {String(p.waitingForTurn)}
                       </div>
                     </div>
                     <Pill tone={idx === turn ? "good" : "neutral"}>{idx === turn ? "Turn" : "Idle"}</Pill>
