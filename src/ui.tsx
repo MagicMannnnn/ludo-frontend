@@ -78,9 +78,11 @@ export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
 export function Pill({
   children,
   tone = "neutral",
+  color,
 }: {
   children: React.ReactNode;
   tone?: "neutral" | "good" | "warn";
+  color?: string;
 }) {
   const bg =
     tone === "good"
@@ -104,7 +106,7 @@ export function Pill({
         gap: 8,
         padding: "6px 10px",
         borderRadius: 999,
-        background: bg,
+        background: color ||bg,
         color: fg,
         fontWeight: 850,
         fontSize: 12,

@@ -210,6 +210,9 @@ export function GameScreen({
                   const finished = typeof p.finishingPosition === "number";
                   const isTurn = idx === turn;
 
+                  // Use seat color
+                  const seatBorder = `1px solid var(--seat${p.seat})`;
+
                   return (
                     <div
                       key={idx}
@@ -219,9 +222,9 @@ export function GameScreen({
                         justifyContent: "space-between",
                         padding: "10px 10px",
                         borderRadius: 14,
-                        border: "1px solid var(--border)",
+                        border: seatBorder,
                         background: finished
-                          ? "rgba(34,197,94,0.10)"
+                          ? `var(--seat${p.seat})`
                           : isTurn
                           ? "rgba(255,255,255,0.06)"
                           : "rgba(255,255,255,0.04)",
@@ -234,7 +237,7 @@ export function GameScreen({
                           {idx === session.seat ? " • You" : ""}
                         </div>
                         <div style={{ fontSize: 12, color: "var(--muted)" }}>
-                          Seat {p.seat} • Waiting: {String(p.waitingForTurn)}
+                          Seat {p.seat + 1} • Waiting: {String(p.waitingForTurn)}
                         </div>
                       </div>
 
@@ -242,7 +245,7 @@ export function GameScreen({
                         {finished ? (
                           <Pill tone="good">FINISHED #{p.finishingPosition}</Pill>
                         ) : (
-                          <Pill tone={isTurn ? "good" : "neutral"}>{isTurn ? "Turn" : "Idle"}</Pill>
+                          <Pill tone={"neutral"} color={isTurn ? `var(--seat${p.seat})` : undefined}>{isTurn ? "Turn" : "Idle"}</Pill>
                         )}
                       </div>
                     </div>
