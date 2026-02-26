@@ -68,13 +68,23 @@ export function useGameController() {
     }
   }, [connect, push]);
 
-  const leave = useCallback(() => {
-    socketRef.current?.disconnect();
+  const leave = useCallback(async () => {
+    if (!session) return;
+    setBusy(true);
+    try {
+      const res = await api.leave(session.code, session.playerId);
+      if (isSnap(res)) setSnap(res);
+      socketRef.current?.disconnect();
     socketRef.current = null;
     clearSession();
     setSession(null);
     setSnap(null);
-  }, []);
+    } catch (e: any) {
+      push(e?.message ?? "Leave failed");
+    } finally {
+      setBusy(false);
+    }
+  }, [session, push]);
 
   const canRoll = useMemo(() => {
     if (!snap || mySeat == null) return false;

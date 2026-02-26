@@ -24,4 +24,5 @@ export const api = {
   roll: (code: string, playerId: string) => post<ApiResponse>("/api/roll", { code, playerId }),
   move: (code: string, playerId: string, tokenId: number) =>
     post<ApiResponse>("/api/move", { code, playerId, tokenId }),
+  leave: (code: string, playerId: string) => post<ApiResponse>("/api/leave", { code, playerId }),
 };
