@@ -74,15 +74,15 @@ export function useGameController() {
     try {
       const res = await api.leave(session.code, session.playerId);
       if (isSnap(res)) setSnap(res);
-      socketRef.current?.disconnect();
-    socketRef.current = null;
-    clearSession();
-    setSession(null);
-    setSnap(null);
     } catch (e: any) {
       push(e?.message ?? "Leave failed");
     } finally {
       setBusy(false);
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+      clearSession();
+      setSession(null);
+      setSnap(null);
     }
   }, [session, push]);
 
